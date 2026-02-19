@@ -181,10 +181,10 @@ int source(char *script) {
 
 int echo(char *var) {
     if (var[0] == '$') {
-	char *val = mem_get_value(var + 1);
-	if (strcmp(val, "Variable does not exist") == 0) {
-	    val = "";
-	}
+        char *val = mem_get_value(var + 1);
+        if (strcmp(val, "Variable does not exist") == 0) {
+            val = "";
+        }
 	    printf("%s\n", val);
     } else {
 	    printf("%s\n", var);
@@ -196,8 +196,10 @@ int my_ls() {
     struct dirent **dir_entry_list;
     int n = scandir(".", &dir_entry_list, NULL, alphasort);
 
-    if (n < 0) return 1;
-
+    if (n < 0) {
+        perror("my_ls couldn't scan the directory");
+        return 1;
+    }
     for (int i = 0; i < n; i++) {
         printf("%s\n", dir_entry_list[i]->d_name);
         free(dir_entry_list[i]);
@@ -238,8 +240,10 @@ int my_mkdir(char *dirname) {
         S_IRUSR | S_IWUSR | S_IXUSR |   // usr:     rwx
         S_IRGRP | S_IXGRP |             // group:   r-x
         S_IROTH | S_IXOTH;              // others:  r-x
-    mkdir(dirname, mode);
-    
+    if (mkdir(dirname, mode)) {
+        perror("Something went wrong in my_mkdir");
+        return 1;
+    }
     return 0;
 }
 

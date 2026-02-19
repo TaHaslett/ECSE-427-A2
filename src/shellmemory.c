@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "shellmemory.h"
+#include <sys/types.h>
 
 struct memory_struct {
     char *var;
@@ -9,6 +10,11 @@ struct memory_struct {
 };
 
 struct memory_struct shellmemory[MEM_SIZE];
+
+struct script_line_struct {
+    pid_t pid;
+    char line[100];
+};
 
 // Helper functions
 int match(char *model, char *var) {

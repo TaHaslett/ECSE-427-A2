@@ -6,6 +6,8 @@
 #include "interpreter.h"
 #include "shellmemory.h"
 
+int batch = 0;
+
 int parseInput(char ui[]);
 
 // Start of everything
@@ -21,7 +23,6 @@ int main(int argc, char *argv[]) {
         userInput[i] = '\0';
     }
 
-    int batch = 0;
     if (!isatty(fileno(stdin))) batch = 1;
 
     //init shell memory
@@ -29,8 +30,8 @@ int main(int argc, char *argv[]) {
     while(1) {							
         if (!batch) printf("%c ", prompt);
         if (fgets(userInput, MAX_USER_INPUT-1, stdin) == NULL) {
-	    break;
-	}
+	        break;
+	    }
         errorCode = parseInput(userInput);
         if (errorCode == -1) exit(99);	// ignore all other errors
         memset(userInput, 0, sizeof(userInput));
