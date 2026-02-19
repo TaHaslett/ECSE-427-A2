@@ -13,19 +13,12 @@ struct memory_struct shellmemory[MEM_SIZE];
 
 struct script_line_struct {
     pid_t pid;
-    char line[100];
+    char *start[];
+    char *end[];
+    char *curr[];
 };
 
-// Helper functions
-int match(char *model, char *var) {
-    int i, len = strlen(var), matchCount = 0;
-    for (i = 0; i < len; i++) {
-        if (model[i] == var[i]) matchCount++;
-    }
-    if (matchCount == len) {
-        return 1;
-    } else return 0;
-}
+char script_memory[MEM_SIZE][LINE_SIZE];
 
 // Shell memory functions
 
