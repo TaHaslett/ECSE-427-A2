@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "shellmemory.h"
 #include <sys/types.h>
+#include "scripts.h"
+#include "shellmemory.h"
 
 struct memory_struct {
     char *var;
@@ -10,13 +11,6 @@ struct memory_struct {
 };
 
 struct memory_struct shellmemory[MEM_SIZE];
-
-struct script_line_struct {
-    pid_t pid;
-    char *start[];
-    char *end[];
-    char *curr[];
-};
 
 char script_memory[MEM_SIZE][LINE_SIZE];
 
@@ -64,3 +58,5 @@ char *mem_get_value(char *var_in) {
     }
     return "Variable does not exist";
 }
+
+
