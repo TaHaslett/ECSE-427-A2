@@ -2,9 +2,10 @@
 #define SCHEDULER_H
 
 typedef enum {
-    FIFO,
+    FCFS,
     SJF,
     RR,
+    RR30,
     AGING
 } Policy;
 

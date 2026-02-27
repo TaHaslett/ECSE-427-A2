@@ -6,6 +6,7 @@ typedef struct Script {
     int start_idx;
     int length;
     int pc;
+    int job_length_score; // for AGING scheduling
     struct Script *next;
 } Script;
 
@@ -20,5 +21,6 @@ int is_empty_script_queue(ScriptQueue *queue);
 int enqueue_script(ScriptQueue *queue, Script *script);
 Script *dequeue_script(ScriptQueue *queue);
 Script *peek_script(ScriptQueue *queue);
+int aging_enqueue_script(ScriptQueue *queue, Script *script);
 
 #endif

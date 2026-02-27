@@ -41,6 +41,7 @@ int my_mkdir(char *dirname);
 int my_touch(char *filename);
 int my_cd(char *dirname);
 int run(char *command_args[]);
+int exec(char *command_args[], int args_size);
 
 // Interpret commands and their arguments
 int interpreter(char *command_args[], int args_size) {
@@ -121,6 +122,29 @@ int interpreter(char *command_args[], int args_size) {
         
         return run(command_args);
 
+    } else if (strcmp(command_args[0], "mkdir") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return my_mkdir(command_args[1]);
+
+    } else if (strcmp(command_args[0], "touch") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return my_touch(command_args[1]);
+
+    } else if (strcmp(command_args[0], "cd") == 0) {
+        if (args_size != 2)
+            return badcommand();
+        return my_cd(command_args[1]);
+
+    } else if (strcmp(command_args[0], "exec") == 0) {
+        if (args_size < 3 || args_size > 5)
+            return badcommand();
+
+        // removes the first element which is the exec command
+        command_args++; 
+        return exec(command_args, args_size - 1);
+
     } else
         return badcommand();
 }
@@ -190,10 +214,10 @@ int source(char *script) {
     int errCode = 0;
     Script *s = open_script(script, 0);
     if (s == NULL) {
+        free(s);
         return 1;
     }
-    errCode = scheduler(FIFO, s, NULL, NULL);
-    free(s);
+    errCode = scheduler(FCFS, s, NULL, NULL);
     return errCode;
 }
 
@@ -299,4 +323,45 @@ int run(char *command_args[]) {
         wait(&status);
         return 0;
     }
+}
+
+int exec(char *command_args[], int args_size) {
+    Policy policy;
+    if (strcmp(command_args[args_size - 1], "FCFS") == 0) {
+        policy = FCFS;
+    } else if (strcmp(command_args[args_size - 1], "SJF") == 0) {
+        policy = SJF;
+    } else if (strcmp(command_args[args_size - 1], "RR") == 0) {
+        policy = RR;
+    } else if (strcmp(command_args[args_size - 1], "RR30") == 0) {
+        policy = RR30;
+    } else if (strcmp(command_args[args_size - 1], "AGING") == 0) {
+        policy = AGING;
+    } else {
+        printf("Bad command: exec command requires a valid scheduling policy\n");
+        return 1;
+    }
+    int start_idx = 0;
+    Script *scripts[3] = {NULL, NULL, NULL};
+    for (int i = 0; i < args_size - 1; i++) {
+        char *file = command_args[i];
+        // ensure that files do not have duplicate names
+        for (int j = 0; j < i - 1; j++) {
+            if (strcmp(command_args[j], file) == 0) {
+                printf("Bad command: duplicate script names\n");
+                return 1;
+            }
+        }
+        Script *s = open_script(file, start_idx);
+        if (s == NULL) {
+            for (int j = 0; j < i; j++) {
+                free(scripts[j]);
+            }
+            return 1;
+        }
+        scripts[i] = s;
+        start_idx += s->length;
+    }
+    int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2]);
+    return errCode;
 }

@@ -46,7 +46,7 @@ int enqueue_script(ScriptQueue *queue, Script *script) {
     if (script == NULL)
         return -1;
 
-    script->next = NULL; // Ensure the new script's next is NULL
+    script->next = NULL; // ensure the new script's next is NULL
 
     if (is_empty_script_queue(queue)) {
         queue->head = script;
@@ -71,4 +71,39 @@ Script *dequeue_script(ScriptQueue *queue) {
 Script *peek_script(ScriptQueue *queue) {
     if (queue == NULL) return NULL;
     return queue->head;
+}
+
+int aging_enqueue_script(ScriptQueue *queue, Script *script) {
+    if (queue == NULL)
+        return -1;
+    if (script == NULL)
+        return -1;
+
+    script->next = NULL; // ensure the new script's next is NULL
+
+    if (is_empty_script_queue(queue)) {
+        queue->head = script;
+        queue->tail = script;
+    } else {
+        // insert the script based on its job_length_score
+        Script *current = queue->head;
+        Script *previous = NULL;
+
+        while (current != NULL && current->job_length_score < script->job_length_score) {
+            previous = current;
+            current = current->next;
+        }
+
+        if (previous == NULL) { // insert at the head
+            script->next = queue->head;
+            queue->head = script;
+        } else { // insert in the middle or end
+            previous->next = script;
+            script->next = current;
+            if (current == NULL) { // update tail if inserted at the end
+                queue->tail = script;
+            }
+        }
+    }
+    return 0;
 }
