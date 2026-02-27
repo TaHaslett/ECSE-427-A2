@@ -8,7 +8,9 @@
 #include <sys/wait.h>
 #include "shellmemory.h"
 #include "shell.h"
-#include "dirent.h"
+#include <dirent.h>
+#include "scripts.h"
+#include "scheduler.h"
 
 int MAX_ARGS_SIZE = 100;
 
@@ -21,6 +23,11 @@ int badcommand() {
 int badcommandFileDoesNotExist() {
     printf("Bad command: File not found\n");
     return 3;
+}
+
+int badcommandFileDoesNotFit() {
+    printf("Bad command: File does not fit in script memory\n");
+    return 4;
 }
 
 int help();
@@ -77,22 +84,23 @@ int interpreter(char *command_args[], int args_size) {
 
     } else if (strcmp(command_args[0], "echo") == 0) {
         if (args_size != 2)
-	    return badcommand();
-	return echo(command_args[1]);
+	        return badcommand();
+        return echo(command_args[1]);
+
     } else if (strcmp(command_args[0], "my_ls") == 0) {
     	if (args_size != 1)
-	    return badcommand();
-	return my_ls();
+	        return badcommand();
+	    return my_ls();
     
     } else if (strcmp(command_args[0], "my_mkdir") == 0) {
 	if (args_size != 2)
-	    return badcommand();
-	return my_mkdir(command_args[1]);
+	        return badcommand();
+	    return my_mkdir(command_args[1]);
     
     } else if (strcmp(command_args[0], "my_touch") == 0) {
         if (args_size != 2)
-	    return badcommand();
-	return my_touch(command_args[1]);
+	        return badcommand();
+	    return my_touch(command_args[1]);
     
     } else if (strcmp(command_args[0], "my_cd") == 0) {
         if (args_size != 2)
@@ -148,34 +156,44 @@ int set(char *var, char *value) {
     return 0;
 }
 
-
 int print(char *var) {
     printf("%s\n", mem_get_value(var));
     return 0;
 }
 
+Script *open_script(char *script, int start_idx) {
+    FILE *p = fopen(script, "rt");
+    if (p == NULL) {
+        badcommandFileDoesNotExist();
+        return NULL;
+    }
+    int i = start_idx;
+    if (i >= MEM_SIZE) {
+        fclose(p);
+        badcommandFileDoesNotFit();
+        return NULL;
+    }
+    while (fgets(script_memory[i++], MAX_LINE_SIZE - 1, p) != NULL) {
+        i++;
+        if (i >= MEM_SIZE) {
+            badcommandFileDoesNotFit();
+            fclose(p);
+            return NULL;
+        }
+    }
+    fclose(p);
+    Script *s = create_script(start_idx, i - start_idx);
+    return s;
+}
+
 int source(char *script) {
     int errCode = 0;
-    char line[MAX_USER_INPUT];
-    FILE *p = fopen(script, "rt");      // the program is in a file
-
-    if (p == NULL) {
-        return badcommandFileDoesNotExist();
+    Script *s = open_script(script, 0);
+    if (s == NULL) {
+        return 1;
     }
-
-    fgets(line, MAX_USER_INPUT - 1, p);
-    while (1) {
-        errCode = parseInput(line);     // which calls interpreter()
-        memset(line, 0, sizeof(line));
-
-        if (feof(p)) {
-            break;
-        }
-        fgets(line, MAX_USER_INPUT - 1, p);
-    }
-
-    fclose(p);
-
+    errCode = scheduler(FIFO, s, NULL, NULL);
+    free(s);
     return errCode;
 }
 

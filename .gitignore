@@ -8,6 +8,7 @@ dist/
 build/
 *.o
 *.so
+src/mysh
 
 # IDE and editor files
 .vscode/

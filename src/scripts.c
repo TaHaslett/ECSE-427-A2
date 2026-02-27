@@ -1,63 +1,74 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/types.h>
 #include "scripts.h"
 
-typedef struct {
-    pid_t pid;
-    int start_idx;
-    int end_idx;
-    int curr_idx;
-} Script;
-
-typedef struct {
-    Script script;
-    ScriptQueueNode *next;
-    ScriptQueueNode *prev;    
-} ScriptQueueNode;
-
-typedef struct {
-    ScriptQueueNode *head;
-    ScriptQueueNode *tail;
-} ScriptQueue;
-
-char script_memory[MEM_SIZE][LINE_SIZE];
-
-ScriptQueue *create_script_queue() {
-    ScriptQueue *q = (ScriptQueue *)malloc(sizeof(ScriptQueue));	
-    if (q == NULL) {
-    	perror("Could not allocate ScriptQueue");
-	exit(EXIT_FAILURE);
-    }
-    q->head = q->tail = NULL;
-    return q;
+int generate_pid() {
+    static int pid = 0; // persists across function calls
+    return pid++;
 }
 
-Script *create_script() {
-    Script *s = (Script *)malloc(sizeof(Script));
+ScriptQueue *create_script_queue() {
+    ScriptQueue *queue = malloc(sizeof(ScriptQueue));
+    if (queue == NULL) {
+        perror("Could not allocate ScriptQueue");
+        exit(EXIT_FAILURE);
+    }
+    queue->head = NULL;
+    queue->tail = NULL;
+    return queue;
+}
+
+Script *create_script(int start, int length) {
+    Script *s = malloc(sizeof(Script));
     if (s == NULL) {
         perror("Could not allocate Script");
-	exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
+    s->pid = generate_pid();
+    s->start_idx = start;
+    s->length = length;
+    s->pc = 0;
+    s->next = NULL;
     return s;
 }
 
-ScriptQueueNode *create_script_queue_node(Script script) {
-    ScriptQueueNode *n = (ScriptQueueNode *)malloc(sizeof(ScriptQueueNode);
-    if (n == NULL) {
-    	perror("Could not allocate ScriptQueueNode");
-	exit(EXIT_FAILURE);
+int is_empty_script_queue(ScriptQueue *queue) {
+    if (queue == NULL) {
+        return 1; // consider a NULL queue as empty
     }
-    return n;
-}	
-
-void enqueue_script(ScriptQueue *q, Script *script) {
-}	
-
-Script *dequeue_script() {
+    return queue->head == NULL;
 }
 
-Script *peek_script() {
+int enqueue_script(ScriptQueue *queue, Script *script) {
+    if (queue == NULL)
+        return -1;
+    if (script == NULL)
+        return -1;
 
+    script->next = NULL; // Ensure the new script's next is NULL
+
+    if (is_empty_script_queue(queue)) {
+        queue->head = script;
+        queue->tail = script;
+    } else {
+        queue->tail->next = script;
+        queue->tail = script; 
+    }
+    return 0;
+}	
+
+Script *dequeue_script(ScriptQueue *queue) {
+    if (is_empty_script_queue(queue)) return NULL;
+    Script *script = queue->head;
+    queue->head = queue->head->next;
+    if (queue->head == NULL) {
+        queue->tail = NULL;
+    }
+    return script;
+}
+
+Script *peek_script(ScriptQueue *queue) {
+    if (queue == NULL) return NULL;
+    return queue->head;
 }

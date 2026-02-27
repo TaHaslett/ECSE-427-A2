@@ -1,6 +1,6 @@
 #!/bin/bash
 
-src_folder="../../project/src"
+src_folder="../src"
 
 # ensure that the script is being run in the right directory
 cd "$(dirname "$0")" || exit 1 

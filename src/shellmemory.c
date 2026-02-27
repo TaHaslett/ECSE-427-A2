@@ -12,10 +12,9 @@ struct memory_struct {
 
 struct memory_struct shellmemory[MEM_SIZE];
 
-char script_memory[MEM_SIZE][LINE_SIZE];
+char script_memory[MAX_LINES][MAX_LINE_SIZE];
 
 // Shell memory functions
-
 void mem_init(){
     int i;
     for (i = 0; i < MEM_SIZE; i++){		
@@ -59,4 +58,4 @@ char *mem_get_value(char *var_in) {
     return "Variable does not exist";
 }
 
-
+Script open_script();
