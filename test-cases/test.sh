@@ -12,9 +12,11 @@ passed=0
 failed=0
 total=0
 
+failed_tests=()
+
 for test in *.txt; do
     # skip result files and P_*.txt files
-    if [[ "$test" == T_*_result*.txt ]] || [[ "$test" == P_* ]]; then
+    if [[ "$test" == *_result*.txt ]] || [[ "$test" == P_* ]]; then
         continue
     fi
 
@@ -52,9 +54,10 @@ for test in *.txt; do
         echo "--------------------"
         
         # show diff against first result file for reference
-        # diff -u "${result_files[0]}" output.tmp
+        diff -u "${result_files[0]}" output.tmp
         
         failed=$((failed + 1))
+        failed_tests+=("$test")
     fi 
 
     echo "--------------------"
@@ -67,6 +70,12 @@ echo "Total:    ${total}"
 echo "Passed:   ${passed}"
 echo "Failed:   ${failed}"
 echo "--------------------"
+if [ ${#failed_tests[@]} -gt 0 ]; then
+    echo "Failed tests:"
+    for test in "${failed_tests[@]}"; do
+        echo " - $test"
+    done
+fi
 
 # remove any subfolders that were created
 for dir in */ ; do

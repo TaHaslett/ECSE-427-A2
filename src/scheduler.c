@@ -8,11 +8,19 @@
 
 void sort_scripts_by_length(Script *scripts[], int size) {
     // Simple bubble sort based on script length
-    bool swapped;
     for (int i = 0; i < size - 1; i++) {
-        swapped = false;
+        bool swapped = false;
         for (int j = 0; j < size - i - 1; j++) {
-            if (scripts[j] != NULL && scripts[j + 1] != NULL && scripts[j]->length > scripts[j + 1]->length) {
+            if (scripts[j] == NULL && scripts[j + 1] != NULL) {
+                Script *temp = scripts[j];
+                scripts[j] = scripts[j + 1];
+                scripts[j + 1] = temp;
+                swapped = true;
+            } else if ( 
+                    scripts[j] != NULL && 
+                    scripts[j + 1] != NULL && 
+                    scripts[j]->length > scripts[j + 1]->length) {
+                
                 Script *temp = scripts[j];
                 scripts[j] = scripts[j + 1];
                 scripts[j + 1] = temp;
@@ -28,7 +36,8 @@ void sort_scripts_by_length(Script *scripts[], int size) {
 int non_preemptive_execute(ScriptQueue *queue) {
     int errCode = 0;
     while (!is_empty_script_queue(queue)) {
-        errCode = parseInput(script_memory[peek_script(queue)->start_idx + peek_script(queue)->pc++]);
+        errCode = parseInput(script_memory[peek_script(queue)->start_idx + peek_script(queue)->pc]);
+        peek_script(queue)->pc++;
         if (peek_script(queue)->pc >= peek_script(queue)->length) {
             Script *script = dequeue_script(queue);
             free(script);
@@ -40,32 +49,30 @@ int non_preemptive_execute(ScriptQueue *queue) {
 int round_robin(ScriptQueue *queue, int time_slices) {
     int errCode = 0;
     while (!is_empty_script_queue(queue)) {
-        Script *current_script = peek_script(queue);
+        Script *current_script = dequeue_script(queue);
         for (int i = 0; i < time_slices; i++) { // run each script for time slices
-            if (is_empty_script_queue(queue)) {
-                break;
-            }
-            errCode = parseInput(script_memory[current_script->start_idx + current_script->pc++]);
+            errCode = parseInput(script_memory[current_script->start_idx + current_script->pc]);
+            current_script->pc++;
             if (current_script->pc >= current_script->length) {
-                Script *script = dequeue_script(queue);
-                free(script);
+                free(current_script);
+                current_script = NULL;
                 break;
-            } else {
-                if (i == time_slices - 1) { // after the last time slice, move the script to the end of the queue
-                    Script *script = dequeue_script(queue);
-                    enqueue_script(queue, script);
-                }
             }
         }
+        // if the script is not finished after its time slices, move it to the back of the queue
+        if (current_script != NULL) {
+            enqueue_script(queue, current_script);
+        }
     }
+    return errCode;
 }
 
 int aging(ScriptQueue *queue) {
     int errcode = 0;
     while (!is_empty_script_queue(queue)) {
         Script *script = dequeue_script(queue); // remove the script at the front of the queue
-        errcode = parseInput(script_memory[script->start_idx + script->pc++]);
-        
+        errcode = parseInput(script_memory[script->start_idx + script->pc]);
+        script->pc++;
         // update the job_length_score of all scripts in the queue
         Script *current = queue->head;
         while (current != NULL) {
@@ -113,7 +120,7 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3) 
                 enqueue_script(queue, scripts[i]);
             }
         }
-        errCode = round_robin(queue, 2); // Define the number of time slices for RR
+        errCode = round_robin(queue, 2);
         break;
     
     case RR30:
@@ -129,7 +136,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3) 
         // aging enqueue will simply fail if the script is NULL, so we can enqueue all three without checking for NULL
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
-                scripts[i]->job_length_score = scripts[i]->length; // initialize job_length_score to the script's length
                 aging_enqueue_script(queue, scripts[i]);
             }
         }

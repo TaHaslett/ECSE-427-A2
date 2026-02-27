@@ -30,6 +30,7 @@ Script *create_script(int start, int length) {
     s->length = length;
     s->pc = 0;
     s->next = NULL;
+    s->job_length_score = length; // initialize job_length_score to the length of the script
     return s;
 }
 
@@ -45,9 +46,7 @@ int enqueue_script(ScriptQueue *queue, Script *script) {
         return -1;
     if (script == NULL)
         return -1;
-
     script->next = NULL; // ensure the new script's next is NULL
-
     if (is_empty_script_queue(queue)) {
         queue->head = script;
         queue->tail = script;
@@ -61,10 +60,11 @@ int enqueue_script(ScriptQueue *queue, Script *script) {
 Script *dequeue_script(ScriptQueue *queue) {
     if (is_empty_script_queue(queue)) return NULL;
     Script *script = queue->head;
-    queue->head = queue->head->next;
+    queue->head = script->next;
     if (queue->head == NULL) {
         queue->tail = NULL;
     }
+    script->next = NULL; // detach the dequeued script from the queue
     return script;
 }
 

@@ -197,7 +197,7 @@ Script *open_script(char *script, int start_idx) {
         badcommandFileDoesNotFit();
         return NULL;
     }
-    while (fgets(script_memory[i++], MAX_LINE_SIZE - 1, p) != NULL) {
+    while (fgets(script_memory[i], MAX_LINE_SIZE - 1, p) != NULL) {
         i++;
         if (i >= MEM_SIZE) {
             badcommandFileDoesNotFit();
