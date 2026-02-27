@@ -102,41 +102,15 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
         scheduler_queue = create_script_queue();
     }
     Script *scripts[3] = {script1, script2, script3};
-    switch (policy) {
-    case FCFS:
-        for (int i = 0; i < 3; i++) {
-            if (scripts[i] != NULL) {
-                enqueue_script(scheduler_queue, scripts[i]);
-            }
-        }
-        break;
     
-    case SJF:
-        sort_scripts_by_length(scripts, 3);
+    if (policy == SJF) {
+        sort_scripts_by_length(scripts, 3); 
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
                 enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        break;
-
-    case RR:
-        for (int i = 0; i < 3; i++) {
-            if (scripts[i] != NULL) {
-                enqueue_script(scheduler_queue, scripts[i]);
-            }
-        }
-        break;
-    
-    case RR30:
-        for (int i = 0; i < 3; i++) {
-            if (scripts[i] != NULL) {
-                enqueue_script(scheduler_queue, scripts[i]);
-            }
-        }
-        break;
-    
-    case AGING:
+    } else if (policy == AGING) {
         // add scripts to the queue in reverse order so that they are initially processed in the order they were given if there is a tie in their job_length_score, 
         // but will be re-ordered based on their job_length_score as they are processed
         // this is the behavior that was laid out in the assignment spec
@@ -145,13 +119,14 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
                 aging_enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        enqueue_script_front(scheduler_queue, batch_script); 
-        errCode = aging(scheduler_queue);
-        break;
-
-    default:
-        break;
+    } else { // all other policies just add scripts to the queue in the order they were given
+        for (int i = 0; i < 3; i++) {
+            if (scripts[i] != NULL) {
+                enqueue_script(scheduler_queue, scripts[i]);
+            }
+        }
     }
+    
     // a pointer to NULL indicates that the exec command is not being run in background mode
     if (batch_script != NULL) {
             enqueue_script_front(scheduler_queue, batch_script); 
