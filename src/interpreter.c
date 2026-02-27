@@ -193,21 +193,23 @@ Script *open_script(char *script, int start_idx) {
         return NULL;
     }
     int i = start_idx;
-    if (i >= MEM_SIZE) {
-        fclose(p);
+    if (i >= MAX_LINES) {
         badcommandFileDoesNotFit();
+        fclose(p);
         return NULL;
     }
+    int lines = 0;
     while (fgets(script_memory[i], MAX_LINE_SIZE - 1, p) != NULL) {
         i++;
-        if (i >= MEM_SIZE) {
+        lines++;
+        if (i >= MAX_LINES) {
             badcommandFileDoesNotFit();
             fclose(p);
             return NULL;
         }
     }
     fclose(p);
-    Script *s = create_script(start_idx, i - start_idx);
+    Script *s = create_script(start_idx, lines);
     return s;
 }
 
@@ -326,21 +328,44 @@ int run(char *command_args[]) {
     }
 }
 
+Policy parse_policy(char *policy_str) {
+    if (strcmp(policy_str, "FCFS") == 0) {
+        return FCFS;
+    } else if (strcmp(policy_str, "SJF") == 0) {
+        return SJF;
+    } else if (strcmp(policy_str, "RR") == 0) {
+        return RR;
+    } else if (strcmp(policy_str, "RR30") == 0) {
+        return RR30;
+    } else if (strcmp(policy_str, "AGING") == 0) {
+        return AGING;
+    } else {
+        printf("Bad command: exec command requires a valid scheduling policy\n");
+        exit(1);
+    }
+}
+
 Script *create_batch_script(int start_idx) {
     char line[MAX_LINE_SIZE];
-    int count = 0;
+    int lines = 0;
     int i = start_idx;
     while (fgets(line, MAX_LINE_SIZE, stdin) != NULL) {
+        if (i >= MAX_LINES) {
+            printf("Batch script does not fit in script memory\n");
+            return NULL;
+        }
         strcpy(script_memory[i], line);
         i++;
-        count++;
+        lines++;
     }
 
-    return create_script(start_idx, count);
+    return create_script(start_idx, lines);
 }
 
 int exec(char *command_args[], int args_size) {
-    Policy policy;
+    static int memory_offset = 0; // static variable to keep track of the next available memory index for scripts
+    int memory_start_idx = memory_offset;
+
     bool background_mode = false;
     bool multi_thread_mode = false;
     if (strcmp(command_args[args_size - 1], "MT") == 0) {
@@ -351,27 +376,15 @@ int exec(char *command_args[], int args_size) {
         background_mode = true;
         args_size--; // remove the BG argument from consideration
     }
-    if (strcmp(command_args[args_size - 1], "FCFS") == 0) {
-        policy = FCFS;
-    } else if (strcmp(command_args[args_size - 1], "SJF") == 0) {
-        policy = SJF;
-    } else if (strcmp(command_args[args_size - 1], "RR") == 0) {
-        policy = RR;
-    } else if (strcmp(command_args[args_size - 1], "RR30") == 0) {
-        policy = RR30;
-    } else if (strcmp(command_args[args_size - 1], "AGING") == 0) {
-        policy = AGING;
-    } else {
-        printf("Bad command: exec command requires a valid scheduling policy\n");
-        return 1;
-    }
+    Policy policy = parse_policy(command_args[args_size - 1]);
     args_size--; // remove the policy argument from consideration
+    
     Script *scripts[3] = {NULL, NULL, NULL};
-    int start_idx = 0;
+    int start_idx = memory_offset;
     for (int i = 0; i < args_size; i++) {
         char *file = command_args[i];
         // ensure that files do not have duplicate names
-        for (int j = 0; j < i - 1; j++) {
+        for (int j = 0; j < i; j++) {
             if (strcmp(command_args[j], file) == 0) {
                 printf("Bad command: duplicate script names\n");
                 return 1;
@@ -385,17 +398,21 @@ int exec(char *command_args[], int args_size) {
             return 1;
         }
         scripts[i] = s;
+        memory_offset += s->length;
         start_idx += s->length;
     }
     Script *batch_script = NULL;
-    if (background_mode) {
+    if (background_mode && !scheduler_running) {
         batch_script = create_batch_script(start_idx);
         if (batch_script == NULL) {
             for (int j = 0; j < args_size; j++) {
-                free(scripts[j]);
+                if (scripts[j] != NULL) {
+                    free(scripts[j]);
+                }
             }
             return 1;
         }
+        memory_offset += batch_script->length;
     }
     int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2], batch_script);
     return errCode;

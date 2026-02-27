@@ -94,9 +94,11 @@ int aging(ScriptQueue *queue) {
 }
 
 int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, Script *batch_script) {
+    bool outermost_scheduler = false;
     int errCode = 0;
     if (!scheduler_running) {
         scheduler_running = true;
+        outermost_scheduler = true;
         scheduler_queue = create_script_queue();
     }
     Script *scripts[3] = {script1, script2, script3};
@@ -107,8 +109,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
                 enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        enqueue_script_front(scheduler_queue, batch_script); 
-        errCode = non_preemptive_execute(scheduler_queue);
         break;
     
     case SJF:
@@ -118,8 +118,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
                 enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        enqueue_script_front(scheduler_queue, batch_script); 
-        errCode = non_preemptive_execute(scheduler_queue);
         break;
 
     case RR:
@@ -128,8 +126,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
                 enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        enqueue_script_front(scheduler_queue, batch_script); 
-        errCode = round_robin(scheduler_queue, 2);
         break;
     
     case RR30:
@@ -138,8 +134,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
                 enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        enqueue_script_front(scheduler_queue, batch_script); 
-        errCode = round_robin(scheduler_queue, 30);
         break;
     
     case AGING:
@@ -158,8 +152,35 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
     default:
         break;
     }
-    free(scheduler_queue);
-    scheduler_queue = NULL;
-    scheduler_running = false;
+    // a pointer to NULL indicates that the exec command is not being run in background mode
+    if (batch_script != NULL) {
+            enqueue_script_front(scheduler_queue, batch_script); 
+    }
+
+    // only execute the scheduler if this is the outermost scheduler call
+    // nested scheduler calls will add their scripts to the queue, but the outermost call will be responsible for executing them
+    if (outermost_scheduler) {
+        switch (policy) {
+            case FCFS:
+            case SJF:
+                errCode = non_preemptive_execute(scheduler_queue);
+                break;
+
+            case RR:
+                errCode = round_robin(scheduler_queue, 2);
+                break;
+            case RR30:
+                errCode = round_robin(scheduler_queue, 30);
+                break;
+            case AGING:
+                errCode = aging(scheduler_queue);
+                break;
+            default:
+                break;
+        }
+        scheduler_running = false;
+        free(scheduler_queue);
+        scheduler_queue = NULL;
+    }
     return errCode;
 }
