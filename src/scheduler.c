@@ -6,6 +6,9 @@
 #include "shellmemory.h"
 #include "scheduler.h"
 
+bool scheduler_running = false;
+ScriptQueue *scheduler_queue = NULL;
+
 void sort_scripts_by_length(Script *scripts[], int size) {
     // Simple bubble sort based on script length
     for (int i = 0; i < size - 1; i++) {
@@ -90,63 +93,73 @@ int aging(ScriptQueue *queue) {
     return errcode;
 }
 
-int scheduler(Policy policy, Script *script1, Script *script2, Script *script3) {
+int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, Script *batch_script) {
     int errCode = 0;
-    ScriptQueue *queue = create_script_queue();
+    if (!scheduler_running) {
+        scheduler_running = true;
+        scheduler_queue = create_script_queue();
+    }
     Script *scripts[3] = {script1, script2, script3};
     switch (policy) {
     case FCFS:
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
-                enqueue_script(queue, scripts[i]);
+                enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        errCode = non_preemptive_execute(queue);
+        enqueue_script_front(scheduler_queue, batch_script); 
+        errCode = non_preemptive_execute(scheduler_queue);
         break;
     
     case SJF:
         sort_scripts_by_length(scripts, 3);
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
-                enqueue_script(queue, scripts[i]);
+                enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        errCode = non_preemptive_execute(queue);
+        enqueue_script_front(scheduler_queue, batch_script); 
+        errCode = non_preemptive_execute(scheduler_queue);
         break;
 
     case RR:
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
-                enqueue_script(queue, scripts[i]);
+                enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        errCode = round_robin(queue, 2);
+        enqueue_script_front(scheduler_queue, batch_script); 
+        errCode = round_robin(scheduler_queue, 2);
         break;
     
     case RR30:
         for (int i = 0; i < 3; i++) {
             if (scripts[i] != NULL) {
-                enqueue_script(queue, scripts[i]);
+                enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        errCode = round_robin(queue, 30);
+        enqueue_script_front(scheduler_queue, batch_script); 
+        errCode = round_robin(scheduler_queue, 30);
         break;
-
+    
     case AGING:
         // add scripts to the queue in reverse order so that they are initially processed in the order they were given if there is a tie in their job_length_score, 
         // but will be re-ordered based on their job_length_score as they are processed
         // this is the behavior that was laid out in the assignment spec
         for (int i = 2; i >= 0; i--) {
             if (scripts[i] != NULL) {
-                aging_enqueue_script(queue, scripts[i]);
+                aging_enqueue_script(scheduler_queue, scripts[i]);
             }
         }
-        errCode = aging(queue);
+        enqueue_script_front(scheduler_queue, batch_script); 
+        errCode = aging(scheduler_queue);
         break;
 
     default:
         break;
     }
-    free(queue);
+    free(scheduler_queue);
+    scheduler_queue = NULL;
+    scheduler_running = false;
     return errCode;
 }

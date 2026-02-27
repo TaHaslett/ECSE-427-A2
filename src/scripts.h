@@ -22,5 +22,6 @@ int enqueue_script(ScriptQueue *queue, Script *script);
 Script *dequeue_script(ScriptQueue *queue);
 Script *peek_script(ScriptQueue *queue);
 int aging_enqueue_script(ScriptQueue *queue, Script *script);
+int enqueue_script_front(ScriptQueue *queue, Script *script);
 
 #endif

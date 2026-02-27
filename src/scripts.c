@@ -107,3 +107,19 @@ int aging_enqueue_script(ScriptQueue *queue, Script *script) {
     }
     return 0;
 }
+
+int enqueue_script_front(ScriptQueue *queue, Script *script) {
+    if (queue == NULL)
+        return -1;
+    if (script == NULL)
+        return -1;
+    script->next = NULL; // ensure the new script's next is NULL
+    if (is_empty_script_queue(queue)) {
+        queue->head = script;
+        queue->tail = script;
+    } else {
+        script->next = queue->head;
+        queue->head = script;
+    }
+    return 0;
+}

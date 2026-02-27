@@ -6,9 +6,10 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/wait.h>
+#include <dirent.h>
+#include <stdbool.h>
 #include "shellmemory.h"
 #include "shell.h"
-#include <dirent.h>
 #include "scripts.h"
 #include "scheduler.h"
 
@@ -138,7 +139,7 @@ int interpreter(char *command_args[], int args_size) {
         return my_cd(command_args[1]);
 
     } else if (strcmp(command_args[0], "exec") == 0) {
-        if (args_size < 3 || args_size > 5)
+        if (args_size < 3 || args_size > 7) // exec + at least 1 file + policy, but no more than 3 files + policy + BackGroundMode + MultiThreadMode
             return badcommand();
 
         // removes the first element which is the exec command
@@ -217,7 +218,7 @@ int source(char *script) {
         free(s);
         return 1;
     }
-    errCode = scheduler(FCFS, s, NULL, NULL);
+    errCode = scheduler(FCFS, s, NULL, NULL, NULL);
     return errCode;
 }
 
@@ -325,8 +326,31 @@ int run(char *command_args[]) {
     }
 }
 
+Script *create_batch_script(int start_idx) {
+    char line[MAX_LINE_SIZE];
+    int count = 0;
+    int i = start_idx;
+    while (fgets(line, MAX_LINE_SIZE, stdin) != NULL) {
+        strcpy(script_memory[i], line);
+        i++;
+        count++;
+    }
+
+    return create_script(start_idx, count);
+}
+
 int exec(char *command_args[], int args_size) {
     Policy policy;
+    bool background_mode = false;
+    bool multi_thread_mode = false;
+    if (strcmp(command_args[args_size - 1], "MT") == 0) {
+        multi_thread_mode = true;
+        args_size--; // remove the MT argument from consideration
+    }
+    if (strcmp(command_args[args_size - 1], "#") == 0) {
+        background_mode = true;
+        args_size--; // remove the BG argument from consideration
+    }
     if (strcmp(command_args[args_size - 1], "FCFS") == 0) {
         policy = FCFS;
     } else if (strcmp(command_args[args_size - 1], "SJF") == 0) {
@@ -341,9 +365,10 @@ int exec(char *command_args[], int args_size) {
         printf("Bad command: exec command requires a valid scheduling policy\n");
         return 1;
     }
-    int start_idx = 0;
+    args_size--; // remove the policy argument from consideration
     Script *scripts[3] = {NULL, NULL, NULL};
-    for (int i = 0; i < args_size - 1; i++) {
+    int start_idx = 0;
+    for (int i = 0; i < args_size; i++) {
         char *file = command_args[i];
         // ensure that files do not have duplicate names
         for (int j = 0; j < i - 1; j++) {
@@ -362,6 +387,16 @@ int exec(char *command_args[], int args_size) {
         scripts[i] = s;
         start_idx += s->length;
     }
-    int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2]);
+    Script *batch_script = NULL;
+    if (background_mode) {
+        batch_script = create_batch_script(start_idx);
+        if (batch_script == NULL) {
+            for (int j = 0; j < args_size; j++) {
+                free(scripts[j]);
+            }
+            return 1;
+        }
+    }
+    int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2], batch_script);
     return errCode;
 }
