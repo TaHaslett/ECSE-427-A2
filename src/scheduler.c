@@ -133,8 +133,10 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3) 
         break;
 
     case AGING:
-        // aging enqueue will simply fail if the script is NULL, so we can enqueue all three without checking for NULL
-        for (int i = 0; i < 3; i++) {
+        // add scripts to the queue in reverse order so that they are initially processed in the order they were given if there is a tie in their job_length_score, 
+        // but will be re-ordered based on their job_length_score as they are processed
+        // this is the behavior that was laid out in the assignment spec
+        for (int i = 2; i >= 0; i--) {
             if (scripts[i] != NULL) {
                 aging_enqueue_script(queue, scripts[i]);
             }
