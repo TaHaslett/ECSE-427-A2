@@ -2,11 +2,12 @@
 #include <stdlib.h>
 #include <string.h> 
 #include <unistd.h>
+#include <stdbool.h>
 #include "shell.h"
 #include "interpreter.h"
 #include "shellmemory.h"
 
-int batch = 0;
+bool batch = false;
 
 int parseInput(char ui[]);
 
