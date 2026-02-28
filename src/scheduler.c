@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include "scripts.h"
 #include "shell.h"
 #include "shellmemory.h"
@@ -8,6 +9,19 @@
 
 bool scheduler_running = false;
 ScriptQueue *scheduler_queue = NULL;
+
+// multi threading variables
+bool mt_mode_enabled = false;
+pthread_t worker_threads[NUM_WORKERS];
+pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t queue_cond = PTHREAD_COND_INITIALIZER;
+bool workers_should_stop = false;
+int mt_time_slices;
+
+// tracks how many scripts are currently being executed by a worker 
+// (dequeued but not yet re-enqueued or freed). Used so the main thread 
+// knows the queue is not truly empty while a worker holds a script.
+static int scripts_in_flight = 0;
 
 void sort_scripts_by_length(Script *scripts[], int size) {
     // Simple bubble sort based on script length
@@ -93,14 +107,84 @@ int aging(ScriptQueue *queue) {
     return errcode;
 }
 
-int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, Script *batch_script) {
+void *worker_thread_func(void *arg) {
+    (void)arg;
+
+    while(1) {
+        pthread_mutex_lock(&queue_mutex);
+
+        // wait until there is a script in the queue or until the workers should stop
+        while (is_empty_script_queue(scheduler_queue) && !workers_should_stop) {
+            pthread_cond_wait(&queue_cond, &queue_mutex);
+        }
+        // exit the thread if signaled to stop and there are no more scripts to process
+        if (workers_should_stop && is_empty_script_queue(scheduler_queue)) {
+            pthread_mutex_unlock(&queue_mutex);
+            break; // exit the thread if signaled to stop and there are no more scripts to process
+        }
+
+        // if woken up but the queue is empty, release the lock and continue waiting
+        if (is_empty_script_queue(scheduler_queue)) {
+            pthread_mutex_unlock(&queue_mutex);
+            continue; // if the queue is empty, release the lock and wait for the next signal
+        }
+        Script *script = dequeue_script(scheduler_queue);
+        scripts_in_flight++; // increment scripts_in_flight since we just dequeued a script that will now be processed by this worker
+        pthread_mutex_unlock(&queue_mutex);
+
+        for (int i = 0; i < mt_time_slices; i++) { // run the script for its time slices
+            parseInput(script_memory[script->start_idx + script->pc]);
+            script->pc++;
+            if (script->pc >= script->length) {
+                free(script);
+                script = NULL;
+                break;
+            }
+        }
+        // reinsert the script back into the queue if it is not finished after its time slices
+        pthread_mutex_lock(&queue_mutex);
+        if (script != NULL) {
+            enqueue_script(scheduler_queue, script);
+        }
+        pthread_cond_broadcast(&queue_cond); // signal the main thread in case it is waiting for the queue to be empty
+        pthread_mutex_unlock(&queue_mutex);
+    }
+    return NULL;
+}
+
+void start_worker_threads(int time_slices) {
+    mt_time_slices = time_slices;
+    workers_should_stop = false;
+    scripts_in_flight = 0;
+    for (int i = 0; i < NUM_WORKERS; i++) {
+        pthread_create(&worker_threads[i], NULL, worker_thread_func, NULL);
+    }
+}
+
+void stop_worker_threads() {
+    pthread_mutex_lock(&queue_mutex);
+    workers_should_stop = true;
+    pthread_cond_broadcast(&queue_cond); // wake up all worker threads so they can exit
+    pthread_mutex_unlock(&queue_mutex);
+    for (int i = 0; i < NUM_WORKERS; i++) { // wait for all worker threads to finish
+        pthread_join(worker_threads[i], NULL);
+    }
+}
+
+int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, Script *batch_script, bool multi_thread_mode) {
     bool outermost_scheduler = false;
     int errCode = 0;
+
     if (!scheduler_running) {
         scheduler_running = true;
         outermost_scheduler = true;
         scheduler_queue = create_script_queue();
     }
+
+    if (multi_thread_mode && !mt_mode_enabled) {
+        mt_mode_enabled = true;
+    }
+
     Script *scripts[3] = {script1, script2, script3};
     
     if (policy == SJF) {
@@ -129,12 +213,39 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
     
     // a pointer to NULL indicates that the exec command is not being run in background mode
     if (batch_script != NULL) {
-            enqueue_script_front(scheduler_queue, batch_script); 
+        enqueue_script_front(scheduler_queue, batch_script); 
     }
 
     // only execute the scheduler if this is the outermost scheduler call
     // nested scheduler calls will add their scripts to the queue, but the outermost call will be responsible for executing them
-    if (outermost_scheduler) {
+    if (!outermost_scheduler) {
+        if (mt_mode_enabled) {
+            pthread_mutex_lock(&queue_mutex);
+            pthread_cond_broadcast(&queue_cond); // signal worker threads in case they are waiting for new scripts to be added to the queue
+            pthread_mutex_unlock(&queue_mutex);
+        }
+        return 0;
+    }
+
+    if (mt_mode_enabled && (policy == RR || policy == RR30)) {
+        int time_slices = (policy == RR) ? 2 : 30;
+        start_worker_threads(time_slices);
+        
+        // signal the workers that there are scripts to work on
+        pthread_mutex_lock(&queue_mutex);
+        pthread_cond_broadcast(&queue_cond);
+        pthread_mutex_unlock(&queue_mutex);
+
+        // wait for queue to be empty before stopping the worker threads
+        pthread_mutex_lock(&queue_mutex);
+        while (!is_empty_script_queue(scheduler_queue)) {
+            pthread_cond_wait(&queue_cond, &queue_mutex);
+        }
+        pthread_mutex_unlock(&queue_mutex);
+
+        // stop the worker threads after the queue is empty
+        stop_worker_threads();
+    } else { // normal execution for non-MT modes
         switch (policy) {
             case FCFS:
             case SJF:
@@ -153,9 +264,9 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
             default:
                 break;
         }
-        scheduler_running = false;
-        free(scheduler_queue);
-        scheduler_queue = NULL;
     }
+    scheduler_running = false;
+    free(scheduler_queue);
+    scheduler_queue = NULL;
     return errCode;
 }

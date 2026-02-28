@@ -16,10 +16,13 @@ failed_tests=()
 
 for test in *.txt; do
     # skip result files and P_*.txt files
-    if [[ "$test" == *_result*.txt ]] || [[ "$test" == P_* ]]; then
+    if [[ "$test" == *_result*.txt ]] || [[ "$test" == P_* ]] ; then
         continue
     fi
-
+    # only run the T_MT* tests
+    if [[ "$test" != T_MT* ]]; then
+        continue
+    fi
     base="${test%.txt}"
 
     # find all matching result files
@@ -35,43 +38,32 @@ for test in *.txt; do
 
     "./${src_folder}/mysh" < "${test}" > output.tmp
 
-    match_found=false
-    matched_file=""
-
+    expected_lines=0
+    output_lines=0
     for expected in "${result_files[@]}"; do
         # the tests labeled T_MT*.txt behave non deterministically, 
         # so we will just check that they match the result length, rather than the exact output
-        if [[ "$test" == T_MT* ]]; then
-            expected_lines=$(wc -l < "$expected")
-            output_lines=$(wc -l < output.tmp)
-            if [ "$expected_lines" = "$output_lines" ]; then
-                match_found=true
-                matched_file="$expected"
-                break
-            fi
+        expected_lines=$(wc -l < "$expected")
+        output_lines=$(wc -l < output.tmp)
+        if [ "$expected_lines" = "$output_lines" ]; then
+            echo "Pass (matched ${matched_file})"
+        passed=$((passed + 1))
+            break
         else
-            if diff -u "$expected" output.tmp > diff.tmp; then
-                match_found=true
-                matched_file="$expected"
-                break
-            fi
+            echo "Fail"
+            echo "--------------------"
+            
+            # show line numbers in the output for easier debugging
+            echo expected="${expected_lines}"
+            echo output="${output_lines}"
+            echo "--------------------"
+
+            
+            failed=$((failed + 1))
+            failed_tests+=("$test")
         fi
     done
-
-    if [ "$match_found" = true ]; then
-        echo "Pass (matched ${matched_file})"
-        passed=$((passed + 1))
-    else
-        echo "Fail (no matching result)"
-        echo "--------------------"
-        
-        # show diff against first result file for reference
-        diff -u "${result_files[0]}" output.tmp
-        
-        failed=$((failed + 1))
-        failed_tests+=("$test")
-    fi 
-
+    
     echo "--------------------"
 
 done

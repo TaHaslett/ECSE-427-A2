@@ -165,6 +165,9 @@ source SCRIPT.TXT	Executes the file SCRIPT.TXT\n ";
 }
 
 int quit() {
+    if (mt_mode_enabled) {
+        stop_worker_threads();
+    }
     printf("Bye!\n");
     exit(0);
 }
@@ -221,7 +224,7 @@ int source(char *script) {
         free(s);
         return 1;
     }
-    errCode = scheduler(FCFS, s, NULL, NULL, NULL);
+    errCode = scheduler(FCFS, s, NULL, NULL, NULL, false);
     return errCode;
 }
 
@@ -342,7 +345,7 @@ Policy parse_policy(char *policy_str) {
         return AGING;
     } else {
         printf("Bad command: exec command requires a valid scheduling policy\n");
-        exit(1);
+        return INVALID_POLICY;
     }
 }
 
@@ -359,7 +362,6 @@ Script *create_batch_script(int start_idx) {
         i++;
         lines++;
     }
-
     return create_script(start_idx, lines);
 }
 
@@ -378,6 +380,9 @@ int exec(char *command_args[], int args_size) {
         args_size--; // remove the BG argument from consideration
     }
     Policy policy = parse_policy(command_args[args_size - 1]);
+    if (policy == INVALID_POLICY) {
+        return 1;
+    }
     args_size--; // remove the policy argument from consideration
     
     Script *scripts[3] = {NULL, NULL, NULL};
@@ -415,6 +420,6 @@ int exec(char *command_args[], int args_size) {
         }
         memory_offset += batch_script->length;
     }
-    int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2], batch_script);
+    int errCode = scheduler(policy, scripts[0], scripts[1], scripts[2], batch_script, multi_thread_mode);
     return errCode;
 }
