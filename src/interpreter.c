@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <dirent.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include "shellmemory.h"
 #include "shell.h"
 #include "scripts.h"
@@ -166,7 +167,11 @@ source SCRIPT.TXT	Executes the file SCRIPT.TXT\n ";
 
 int quit() {
     if (mt_mode_enabled) {
-        stop_worker_threads();
+        // if MT mode is enabled, we need to stop the worker threads before exiting
+        pthread_mutex_lock(&queue_mutex);
+        workers_should_stop = true;
+        pthread_cond_broadcast(&queue_cond); // wake up worker threads so they can exit
+        pthread_mutex_unlock(&queue_mutex);
     }
     printf("Bye!\n");
     exit(0);

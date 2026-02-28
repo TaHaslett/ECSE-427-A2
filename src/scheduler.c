@@ -140,9 +140,9 @@ void *worker_thread_func(void *arg) {
         }
         // reinsert the script back into the queue if it is not finished after its time slices
         pthread_mutex_lock(&queue_mutex);
+        scripts_in_flight--; // decrement scripts_in_flight since this worker is done processing the script for now, even if it is not finished and will be re-enqueued
         if (script->pc >= script->length) {
             free(script);
-            scripts_in_flight--; // decrement scripts_in_flight since this script is finished and will not be re-enqueued
         } else {            
             enqueue_script(scheduler_queue, script);
         }
@@ -229,8 +229,25 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
 
     if (mt_mode_enabled && (policy == RR || policy == RR30)) {
         int time_slices = (policy == RR) ? 2 : 30;
-        start_worker_threads(time_slices);
         
+        if (batch_script != NULL && !is_empty_script_queue(scheduler_queue) && peek_script(scheduler_queue)->pid == batch_script->pid) {
+            Script *batch_script_in_queue = peek_script(scheduler_queue);
+            for (int i = 0; i < time_slices; i++) {
+                parseInput(script_memory[batch_script_in_queue->start_idx + batch_script_in_queue->pc]);
+                batch_script_in_queue->pc++;
+                if (batch_script_in_queue->pc >= batch_script_in_queue->length) {
+                    free(batch_script_in_queue);
+                    batch_script_in_queue = NULL;
+                    break;
+                }
+            }
+            if (batch_script_in_queue != NULL) {
+                enqueue_script_front(scheduler_queue, batch_script_in_queue); // reinsert the batch script at the front of the queue if it is not finished after its time slices
+            }
+        }
+
+        start_worker_threads(time_slices);
+
         // signal the workers that there are scripts to work on
         pthread_mutex_lock(&queue_mutex);
         pthread_cond_broadcast(&queue_cond);
