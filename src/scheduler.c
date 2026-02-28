@@ -112,13 +112,12 @@ void *worker_thread_func(void *arg) {
 
     while(1) {
         pthread_mutex_lock(&queue_mutex);
-
         // wait until there is a script in the queue or until the workers should stop
         while (is_empty_script_queue(scheduler_queue) && !workers_should_stop) {
             pthread_cond_wait(&queue_cond, &queue_mutex);
         }
         // exit the thread if signaled to stop and there are no more scripts to process
-        if (workers_should_stop && is_empty_script_queue(scheduler_queue)) {
+        if (workers_should_stop && is_empty_script_queue(scheduler_queue) && scripts_in_flight == 0) {
             pthread_mutex_unlock(&queue_mutex);
             break; // exit the thread if signaled to stop and there are no more scripts to process
         }
@@ -136,14 +135,15 @@ void *worker_thread_func(void *arg) {
             parseInput(script_memory[script->start_idx + script->pc]);
             script->pc++;
             if (script->pc >= script->length) {
-                free(script);
-                script = NULL;
                 break;
             }
         }
         // reinsert the script back into the queue if it is not finished after its time slices
         pthread_mutex_lock(&queue_mutex);
-        if (script != NULL) {
+        if (script->pc >= script->length) {
+            free(script);
+            scripts_in_flight--; // decrement scripts_in_flight since this script is finished and will not be re-enqueued
+        } else {            
             enqueue_script(scheduler_queue, script);
         }
         pthread_cond_broadcast(&queue_cond); // signal the main thread in case it is waiting for the queue to be empty
@@ -234,11 +234,8 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
         // signal the workers that there are scripts to work on
         pthread_mutex_lock(&queue_mutex);
         pthread_cond_broadcast(&queue_cond);
-        pthread_mutex_unlock(&queue_mutex);
-
         // wait for queue to be empty before stopping the worker threads
-        pthread_mutex_lock(&queue_mutex);
-        while (!is_empty_script_queue(scheduler_queue)) {
+        while (!is_empty_script_queue(scheduler_queue) || scripts_in_flight > 0) {
             pthread_cond_wait(&queue_cond, &queue_mutex);
         }
         pthread_mutex_unlock(&queue_mutex);
@@ -251,7 +248,6 @@ int scheduler(Policy policy, Script *script1, Script *script2, Script *script3, 
             case SJF:
                 errCode = non_preemptive_execute(scheduler_queue);
                 break;
-
             case RR:
                 errCode = round_robin(scheduler_queue, 2);
                 break;
